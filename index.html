@@ -1,3 +1,4 @@
+
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
@@ -364,7 +365,8 @@
                     { value: "1", label: "Barely meets basic needs" },
                     { value: "2", label: "Meets needs + emergencies" },
                     { value: "3", label: "Saves and invests" }
-                ],
+                ]
+                ,
                 OPTIONS_ASSETS: [
                     { name: "Refrigerator", label: "Refrigerator" },
                     { name: "Automatic washing machine", label: "Automatic washing machine" },
@@ -465,15 +467,9 @@
 
             options.forEach((option, index) => {
                 const colIndex = index % 2;
-                let div = group.querySelector(`.asset-col-${colIndex}`);
-                
-                // If column div doesn't exist, create it (Tailwind grid handles layout)
-                if (!div) {
-                    div = document.createElement('div');
-                    div.className = `flex items-center space-x-3 ${CURRENT_LANG.dir === 'rtl' ? 'space-x-reverse' : ''}`;
-                    div.id = `asset-item-${index}`;
-                    group.appendChild(div);
-                }
+                let div = document.createElement('div');
+                div.className = `flex items-center space-x-3 ${CURRENT_LANG.dir === 'rtl' ? 'space-x-reverse' : ''}`;
+                group.appendChild(div);
 
                 const input = document.createElement('input');
                 input.id = `asset_${index + 1}`;
@@ -483,12 +479,11 @@
                 input.setAttribute('data-asset-name', option.label);
                 input.className = 'h-4 w-4 text-blue-600 rounded border-gray-300';
                 
-                const label = document.createElement('label');
+                const label = document.html.createElement('label');
                 label.htmlFor = input.id;
                 label.className = 'text-sm font-medium text-gray-700';
                 label.textContent = option.label;
                 
-                div.innerHTML = ''; // Clear previous content
                 div.appendChild(input);
                 div.appendChild(label);
             });
@@ -537,8 +532,34 @@
             populateSelect('edu_w', CURRENT_LANG.strings.OPTIONS_EDU);
             populateSelect('occ_w', CURRENT_LANG.strings.OPTIONS_OCC);
             populateRadioGroup('income-radio-group', CURRENT_LANG.strings.OPTIONS_INCOME);
-            populateAssetsCheckboxes('assets-checkbox-group', CURRENT_LANG.strings.OPTIONS_ASSETS);
             
+            // Fix for asset checkboxes since the original populateAssetsCheckboxes had issues in this editor
+            // Manually clearing and populating the asset group content for stability
+            const assetGroup = document.getElementById('assets-checkbox-group');
+            assetGroup.innerHTML = '';
+            CURRENT_LANG.strings.OPTIONS_ASSETS.forEach((asset, index) => {
+                const div = document.createElement('div');
+                div.className = `flex items-center space-x-3 ${CURRENT_LANG.dir === 'rtl' ? 'space-x-reverse' : ''}`;
+                
+                const input = document.createElement('input');
+                input.id = `asset_${index + 1}`;
+                input.name = 'assets';
+                input.type = 'checkbox';
+                input.value = '1';
+                input.setAttribute('data-asset-name', asset.label);
+                input.className = 'h-4 w-4 text-blue-600 rounded border-gray-300';
+                
+                const label = document.createElement('label');
+                label.htmlFor = input.id;
+                label.className = 'text-sm font-medium text-gray-700';
+                label.textContent = asset.label;
+                
+                div.appendChild(input);
+                div.appendChild(label);
+                assetGroup.appendChild(div);
+            });
+
+
             // Update all static text strings
             updateStaticText();
 
@@ -546,25 +567,49 @@
             document.getElementById('language-select-screen').classList.add('hidden');
             document.getElementById('intro-screen').classList.remove('hidden');
 
-            // If Firebase is already initialized, update status
+            // If Firebase is already initialized (or simulated), update status
             if (userId !== 'loading') {
                  document.getElementById('auth-status').innerHTML = CURRENT_LANG.strings.AUTH_SUCCESS + `<span class="font-mono text-xs">${userId}</span>`;
             }
         }
 
-        // --- FIREBASE INITIALIZATION AND AUTH ---
+        // --- FIREBASE INITIALIZATION AND AUTH (Modified for local testing) ---
         async function initializeFirebase() {
+            // Check if credentials exist (only available in deployed Canvas/GitHub environments)
+            const isConfigAvailable = (typeof __firebase_config !== 'undefined' && JSON.parse(__firebase_config).apiKey);
+
+            if (!isConfigAvailable) {
+                // FALLBACK FOR LOCAL TESTING (NO REAL DATABASE CONNECTION)
+                console.warn("Firebase configuration not found. Simulating successful connection for local testing.");
+                userId = 'TEST-RESEARCHER-ID';
+                
+                // Use a slight delay to mimic async loading
+                setTimeout(() => {
+                    document.getElementById('auth-status').innerHTML = CURRENT_LANG.strings.AUTH_SUCCESS + `<span class="font-mono text-xs">${userId}</span>`;
+                    document.getElementById('start-button').disabled = false;
+                    document.getElementById('start-button').classList.remove('opacity-50', 'cursor-not-allowed');
+                }, 500);
+
+                // Override saveCalculation to do nothing but report success
+                window.saveCalculation = async function(data) {
+                    const S = CURRENT_LANG.strings;
+                    const saveStatusElement = document.getElementById('save-status-results');
+                    
+                    saveStatusElement.innerText = S.SAVE_STATUS_SUCCESS + " (Data not saved in this test environment)";
+                    saveStatusElement.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-yellow-100', 'text-yellow-700');
+                    saveStatusElement.classList.add('bg-green-100', 'text-green-700');
+                    document.getElementById('save-success').classList.remove('hidden');
+                    saveStatusElement.classList.remove('hidden');
+                };
+
+                return;
+            }
+            
+            // --- ACTUAL FIREBASE INITIALIZATION (If config is available) ---
             try {
                 if (typeof setLogLevel !== 'undefined') { setLogLevel('debug'); } 
 
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-                
-                if (Object.keys(firebaseConfig).length === 0) {
-                    console.error("Firebase config is missing.");
-                    // Cannot rely on CURRENT_LANG yet, use placeholder
-                    document.getElementById('auth-status').innerText = "Error: Firebase configuration missing."; 
-                    return;
-                }
+                const firebaseConfig = JSON.parse(__firebase_config);
                 
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
@@ -581,7 +626,6 @@
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         userId = user.uid;
-                        // Update status text based on selected language
                         document.getElementById('auth-status').innerHTML = CURRENT_LANG.strings.AUTH_SUCCESS + `<span class="font-mono text-xs">${userId}</span>`;
                         document.getElementById('start-button').disabled = false;
                         document.getElementById('start-button').classList.remove('opacity-50', 'cursor-not-allowed');
@@ -597,7 +641,7 @@
             }
         }
         
-        // --- DATA SAVING FUNCTION ---
+        // --- DATA SAVING FUNCTION (Original, used if config is available) ---
 
         async function saveCalculation(data) {
             const S = CURRENT_LANG.strings;
@@ -794,7 +838,7 @@
             };
             
             // 1. Save Data (asynchronously)
-            saveCalculation(dataToSave);
+            window.saveCalculation(dataToSave); // Use window.saveCalculation, which is now mocked if Firebase isn't real
 
             // 2. Hide Calculator and Show Results (UI Update)
             document.getElementById('calculator-screen').classList.add('hidden');
