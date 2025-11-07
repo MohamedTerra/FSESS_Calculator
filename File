@@ -1,0 +1,849 @@
+!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Socioeconomic Status Scale (FSESS) Calculator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Cairo:wght@400;700&display=swap');
+        
+        /* Default font for LTR */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+        }
+        /* Override for RTL */
+        [dir="rtl"] body, [dir="rtl"] .text-right-rtl {
+            font-family: 'Cairo', sans-serif;
+            text-align: right;
+        }
+        [dir="rtl"] .text-left-rtl {
+            text-align: right;
+        }
+        [dir="ltr"] .text-left-rtl {
+            text-align: left;
+        }
+
+        /* Fix LTR inputs in RTL view */
+        [dir="rtl"] select, [dir="rtl"] input[type="radio"], [dir="rtl"] input[type="checkbox"] {
+            margin-left: 0.75rem; /* Maintain standard spacing for RTL */
+            margin-right: 0;
+        }
+        [dir="rtl"] .space-x-reverse > * {
+            margin-right: 0.75rem !important;
+            margin-left: 0 !important;
+        }
+
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <!-- Firebase SDK Imports (Essential for database connection) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, doc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase variables accessible to the main script
+        window.initializeApp = initializeApp;
+        window.getAuth = getAuth;
+        window.signInAnonymously = signInAnonymously;
+        window.signInWithCustomToken = signInWithCustomToken;
+        window.getFirestore = getFirestore;
+        window.collection = collection;
+        window.addDoc = addDoc;
+        window.doc = doc;
+        window.setLogLevel = setLogLevel;
+        window.onAuthStateChanged = onAuthStateChanged;
+    </script>
+    
+    <div id="app" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-6 sm:p-10 border border-gray-100">
+        <h1 id="main-title" class="text-3xl sm:text-4xl font-extrabold text-blue-700 mb-6 text-left">
+            FSESS Calculator
+        </h1>
+
+        <!-- ======================================= LANGUAGE SELECTION SCREEN ======================================= -->
+        <div id="language-select-screen">
+            <h2 class="text-2xl font-bold text-gray-700 mb-4 text-left">Choose Language | اختر اللغة</h2>
+            <p class="text-gray-700 mb-8 text-left leading-loose">
+                Please select your preferred language to continue. | الرجاء اختيار لغتك المفضلة للمتابعة.
+            </p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <button onclick="setLanguage('en')" class="w-full sm:w-1/2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                    English (EN)
+                </button>
+                <button onclick="setLanguage('ar')" class="w-full sm:w-1/2 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                    العربية (AR)
+                </button>
+            </div>
+        </div>
+        
+        <!-- ======================================= 1. INTRO SCREEN (Default) ======================================= -->
+        <div id="intro-screen" class="hidden">
+            <h2 id="welcome-title" class="text-2xl font-bold text-gray-700 mb-4 text-left-rtl">Welcome to the FSESS Calculator</h2>
+            <p id="welcome-text" class="text-gray-700 mb-6 leading-loose text-left-rtl">
+                This tool uses the scoring method based on four domains...
+            </p>
+            
+            <div id="auth-status" class="bg-yellow-50 border border-yellow-200 p-3 rounded-lg text-sm text-yellow-800 mb-6 text-left-rtl">
+                Connecting...
+            </div>
+
+            <button onclick="startCalculation()" id="start-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md opacity-50 cursor-not-allowed" disabled>
+                Start Calculation
+            </button>
+        </div>
+
+        <!-- ======================================= 2. CALCULATION SCREEN (Initially hidden) ======================================= -->
+        <div id="calculator-screen" class="hidden">
+            <div id="error-message" class="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm hidden text-center mb-6">
+                <!-- Error message inserted by JS -->
+            </div>
+            <div id="save-status" class="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm hidden text-center mb-6">
+                <!-- Saving message goes here -->
+            </div>
+
+            <form id="ses-form" class="space-y-8">
+                <h2 id="calc-title" class="text-2xl font-bold text-gray-700 border-b pb-2 mb-4 text-left-rtl">1. Family Demographics</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Husband/Male Head -->
+                    <div class="p-4 border rounded-lg bg-gray-50 space-y-4">
+                        <h3 id="husband-title" class="text-lg font-semibold text-gray-700 text-left-rtl">A. Husband/Male Head of Household</h3>
+                        <label id="edu-h-label" for="edu_h" class="block text-sm font-medium text-gray-700 text-left-rtl">Education Level</label>
+                        <select id="edu_h" class="mt-1 block w-full pl-3 pr-10 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <!-- Options populated by JS -->
+                        </select>
+                        
+                        <label id="occ-h-label" for="occ_h" class="block text-sm font-medium text-gray-700 text-left-rtl">Occupation Category</label>
+                        <select id="occ_h" class="mt-1 block w-full pl-3 pr-10 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+
+                    <!-- Wife/Female Head -->
+                    <div class="p-4 border rounded-lg bg-gray-50 space-y-4">
+                        <h3 id="wife-title" class="text-lg font-semibold text-gray-700 text-left-rtl">B. Wife/Female Head of Household</h3>
+                        <label id="edu-w-label" for="edu_w" class="block text-sm font-medium text-gray-700 text-left-rtl">Education Level</label>
+                        <select id="edu_w" class="mt-1 block w-full pl-3 pr-10 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <!-- Options populated by JS -->
+                        </select>
+                        
+                        <label id="occ-w-label" for="occ_w" class="block text-sm font-medium text-gray-700 text-left-rtl">Occupation Category</label>
+                        <select id="occ_w" class="mt-1 block w-full pl-3 pr-10 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                </div>
+
+                <h2 id="finance-title" class="text-2xl font-bold text-gray-700 border-b pb-2 mb-4 text-left-rtl">2. Family Finances & Assets</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Family Income -->
+                    <div class="p-4 border rounded-lg bg-gray-50 space-y-4">
+                        <h3 id="income-title" class="text-lg font-semibold text-gray-700 text-left-rtl">C. Family Income (Max 3 points)</h3>
+                        <div class="space-y-2" id="income-radio-group">
+                            <!-- Radio buttons populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Family Assets -->
+                    <div class="p-4 border rounded-lg bg-gray-50 space-y-4">
+                        <h3 id="assets-title" class="text-lg font-semibold text-gray-700 text-left-rtl">D. Family Assets & Possessions (Max 10 points)</h3>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2" id="assets-checkbox-group">
+                            <!-- Checkboxes populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </form>
+            <button onclick="calculateSES()" id="calculate-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md mt-8">
+                🎯 Calculate Total Score
+            </button>
+        </div>
+
+        <!-- ======================================= 3. RESULTS SCREEN (Initially hidden) ======================================= -->
+        <div id="results-screen" class="mt-8 hidden">
+            <h2 id="results-title" class="text-2xl font-bold text-gray-700 mb-6 text-left-rtl">Calculation Results</h2>
+            
+            <div id="save-status-results" class="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm hidden text-center mb-6">
+                <!-- Saving message goes here -->
+            </div>
+            
+            <div id="result-score" class="p-4 sm:p-6 bg-green-50 border border-green-200 rounded-lg mb-4 text-center">
+                <!-- Score will be inserted here -->
+            </div>
+            
+            <div id="result-classification" class="p-4 sm:p-6 bg-green-100 border border-green-300 rounded-lg mb-6 text-center">
+                <!-- Classification will be inserted here -->
+            </div>
+
+            <h3 id="breakdown-title" class="text-xl font-bold text-gray-700 mt-6 mb-4 text-left-rtl">Score Breakdown</h3>
+            <table class="min-w-full bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th id="th-domain" class="py-3 px-4 text-sm font-semibold text-gray-600 border-b text-left-rtl">Domain</th>
+                        <th id="th-score" class="py-3 px-4 text-sm font-semibold text-gray-600 border-b text-center">Score</th>
+                        <th id="th-max" class="py-3 px-4 text-sm font-semibold text-gray-600 border-b text-center">Max Score</th>
+                    </tr>
+                </thead>
+                <tbody id="breakdown-body" class="divide-y divide-gray-100">
+                    <!-- Breakdown rows generated by JS -->
+                </tbody>
+            </table>
+            
+            <div id="save-success" class="mt-6 p-3 bg-green-100 border border-green-400 text-green-700 rounded-lg text-sm text-center hidden">
+                This result has been successfully saved to your research database.
+            </div>
+
+            <button onclick="startAgain()" id="start-again-button" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md mt-8">
+                Start Again
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- LANGUAGE CONSTANTS ---
+        const LANG_AR = {
+            code: 'ar',
+            dir: 'rtl',
+            strings: {
+                TITLE: 'حاسبة مقياس الوضع الاجتماعي والاقتصادي للأسرة (FSESS)',
+                WELCOME_TITLE: 'مرحباً بك في حاسبة FSESS',
+                WELCOME_TEXT: 'تستخدم هذه الأداة طريقة التسجيل القائمة على أربع مجالات (التعليم، المهنة، الدخل، والممتلكات) والمنشورة بالضبط في الملحق التكميلي لـ **[عنوان بحثك]**. سيتم حفظ جميع الحسابات بشكل آمن في قاعدة بيانات لمساعدتك في تطوير البحث.',
+                AUTH_CONNECTING: 'جارٍ الاتصال...',
+                AUTH_SUCCESS: '✅ متصل بقاعدة البيانات. معرف الباحث: ',
+                AUTH_ERROR: 'خطأ في الاتصال: ',
+                START_CALCULATION: 'ابدأ الحساب',
+                CALCULATION_TITLE: '1. البيانات الديموغرافية للأسرة',
+                FINANCE_TITLE: '2. الشؤون المالية وممتلكات الأسرة',
+                HUSBAND_TITLE: 'أ. الزوج / رب الأسرة',
+                WIFE_TITLE: 'ب. الزوجة / ربة الأسرة',
+                EDU_LABEL: 'مستوى التعليم',
+                OCC_LABEL: 'تصنيف المهنة',
+                INCOME_TITLE: 'ج. دخل الأسرة (الحد الأقصى 3 نقاط)',
+                ASSETS_TITLE: 'د. ممتلكات الأسرة (الحد الأقصى 10 نقاط)',
+                CALCULATE_BUTTON: '🎯 حساب الدرجة الكلية',
+                RESULTS_TITLE: 'نتائج الحساب',
+                SCORE_TOTAL: 'الدرجة الكلية من ',
+                CLASSIFICATION_FINAL: 'التصنيف النهائي:',
+                SCORE_BREAKDOWN: 'تفصيل الدرجات',
+                SAVE_SUCCESS: 'تم حفظ هذه النتيجة بنجاح في قاعدة بيانات بحثك.',
+                START_AGAIN: 'ابدأ من جديد',
+                SAVE_STATUS_SAVING: 'جاري حفظ النتيجة...',
+                SAVE_STATUS_SUCCESS: '✅ تم حفظ النتيجة بنجاح!',
+                SAVE_STATUS_FAIL: '❌ فشل الحفظ: ',
+                ERROR_MISSING: 'الرجاء التأكد من اختيار جميع الخيارات قبل محاولة الحساب.',
+                ERROR_NA_BOTH: "خطأ: لا يمكن اختيار 'لا ينطبق (الوفاة أو الطلاق)' لكلا الزوجين، حيث يجب أن يكون أحد الأبوين موجودًا لحساب وضع الأسرة.",
+                ERROR_NA_INCONSISTENT: "خطأ عدم الاتساق: إذا تم اختيار 'لا ينطبق (الوفاة أو الطلاق)' لتعليم أو مهنة أحد الزوجين، فيجب اختياره للمجال الآخر لنفس الزوج/الزوجة.",
+                DOMAIN_EDU: 'التعليم (الزوج والزوجة)',
+                DOMAIN_OCC: 'المهنة (الزوج والزوجة)',
+                DOMAIN_INC: 'الدخل (من جميع المصادر)',
+                DOMAIN_ASSET: 'الممتلكات والأصول',
+                TABLE_DOMAIN: 'المجال',
+                TABLE_SCORE: 'الدرجة',
+                TABLE_MAX: 'الحد الأقصى',
+
+                CLASSIFICATIONS: {
+                    HIGH: 'مرتفع',
+                    MIDDLE: 'متوسط',
+                    LOW: 'منخفض',
+                    VERY_LOW: 'منخفض جدًا'
+                },
+                
+                OPTIONS_EDU: [
+                    { value: "", label: "-- اختر --", placeholder: true },
+                    { value: "0", label: "لا ينطبق (الوفاة أو الطلاق)", na: true },
+                    { value: "2", label: "أمي" },
+                    { value: "4", label: "أقل من ثانوي" },
+                    { value: "6", label: "ثانوي" },
+                    { value: "8", label: "جامعي" },
+                    { value: "10", label: "دراسات عليا" }
+                ],
+                OPTIONS_OCC: [
+                    { value: "", label: "-- اختر --", placeholder: true },
+                    { value: "0", label: "لا ينطبق (الوفاة أو الطلاق)", na: true },
+                    { value: "0", label: "لا يعمل – ربة منزل" },
+                    { value: "1", label: "عامل غير ماهر" },
+                    { value: "2", label: "عامل ماهر" },
+                    { value: "3", label: "جنود وصف ضباط الجيش والشرطة" },
+                    { value: "4", label: "العاملون في التجارة أو الأعمال الحرة" },
+                    { value: "5", label: "الكتبة وموظفو المكاتب" },
+                    { value: "6", label: "أصحاب المهن العلمية والمشرعون والمديرون وضباط الجيش والشرطة" }
+                ],
+                OPTIONS_INCOME: [
+                    { value: "0", label: "يستدين" },
+                    { value: "1", label: "يكفي الأساسيات بالكاد" },
+                    { value: "2", label: "يكفي الأساسيات والطوارئ" },
+                    { value: "3", label: "يدخر ويستثمر" }
+                ],
+                OPTIONS_ASSETS: [
+                    { name: "Refrigerator", label: "ثلاجة" },
+                    { name: "Automatic washing machine", label: "غسالة أوتوماتيك" },
+                    { name: "Smartphone", label: "هاتف ذكي" },
+                    { name: "Air conditioner", label: "مكيف هواء" },
+                    { name: "Agricultural land", label: "أرض زراعية" },
+                    { name: "Land for housing", label: "أرض للمباني" },
+                    { name: "Shop / Animal farm", label: "محل تجاري / مزرعة مواشي" },
+                    { name: "Another house", label: "منزل آخر" },
+                    { name: "Car", label: "سيارة" },
+                    { name: "Computer", label: "كمبيوتر" }
+                ]
+            }
+        };
+
+        const LANG_EN = {
+            code: 'en',
+            dir: 'ltr',
+            strings: {
+                TITLE: 'Family Socioeconomic Status Scale (FSESS) Calculator',
+                WELCOME_TITLE: 'Welcome to the FSESS Calculator',
+                WELCOME_TEXT: 'This tool uses the scoring method based on four domains (Education, Occupation, Income, and Assets) as published in the supplementary material of **[Your Paper Title]**. All calculations will be securely saved in your Firestore database to assist with your research development.',
+                AUTH_CONNECTING: 'Connecting...',
+                AUTH_SUCCESS: '✅ Connected to database. Researcher ID: ',
+                AUTH_ERROR: 'Connection Error: ',
+                START_CALCULATION: 'Start Calculation',
+                CALCULATION_TITLE: '1. Family Demographics',
+                FINANCE_TITLE: '2. Family Finances & Assets',
+                HUSBAND_TITLE: 'A. Husband/Male Head of Household',
+                WIFE_TITLE: 'B. Wife/Female Head of Household',
+                EDU_LABEL: 'Education Level',
+                OCC_LABEL: 'Occupation Category',
+                INCOME_TITLE: 'C. Family Income (Max 3 points)',
+                ASSETS_TITLE: 'D. Family Assets & Possessions (Max 10 points)',
+                CALCULATE_BUTTON: '🎯 Calculate Total Score',
+                RESULTS_TITLE: 'Calculation Results',
+                SCORE_TOTAL: 'Total Score out of ',
+                CLASSIFICATION_FINAL: 'Final Classification:',
+                SCORE_BREAKDOWN: 'Score Breakdown',
+                SAVE_SUCCESS: 'This result has been successfully saved to your research database.',
+                START_AGAIN: 'Start Again',
+                SAVE_STATUS_SAVING: 'Saving Result...',
+                SAVE_STATUS_SUCCESS: '✅ Result successfully saved!',
+                SAVE_STATUS_FAIL: '❌ Save Failed: ',
+                ERROR_MISSING: 'Please ensure all required fields are selected before calculating.',
+                ERROR_NA_BOTH: "Error: Cannot select 'Non-applicable (death/divorce)' for both spouses. At least one spouse's data is required to calculate Family SES.",
+                ERROR_NA_INCONSISTENT: "Inconsistency Error: If 'Non-applicable (death/divorce)' is selected for a spouse's Education or Occupation, it must be selected for the other.",
+                DOMAIN_EDU: 'Education (Husband & Wife)',
+                DOMAIN_OCC: 'Occupation (Husband & Wife)',
+                DOMAIN_INC: 'Income (All sources)',
+                DOMAIN_ASSET: 'Assets & Possessions',
+                TABLE_DOMAIN: 'Domain',
+                TABLE_SCORE: 'Score',
+                TABLE_MAX: 'Max Score',
+
+                CLASSIFICATIONS: {
+                    HIGH: 'High',
+                    MIDDLE: 'Middle',
+                    LOW: 'Low',
+                    VERY_LOW: 'Very Low'
+                },
+                
+                OPTIONS_EDU: [
+                    { value: "", label: "-- Select --", placeholder: true },
+                    { value: "0", label: "Non-applicable (death/divorce)", na: true },
+                    { value: "2", label: "Illiterate" },
+                    { value: "4", label: "Less than secondary" },
+                    { value: "6", label: "Secondary" },
+                    { value: "8", label: "University" },
+                    { value: "10", label: "Postgraduate" }
+                ],
+                OPTIONS_OCC: [
+                    { value: "", label: "-- Select --", placeholder: true },
+                    { value: "0", label: "Non-applicable (death/divorce)", na: true },
+                    { value: "0", label: "Non-working / Housewife" },
+                    { value: "1", label: "Unskilled manual worker" },
+                    { value: "2", label: "Skilled manual worker" },
+                    { value: "3", label: "Army or police (soldiers & NCOs)" },
+                    { value: "4", label: "Business / Trade" },
+                    { value: "5", label: "Clerical / Office worker" },
+                    { value: "6", label: "Professional / Legislative / Director / Commissioned officer" }
+                ],
+                OPTIONS_INCOME: [
+                    { value: "0", label: "Indebt" },
+                    { value: "1", label: "Barely meets basic needs" },
+                    { value: "2", label: "Meets needs + emergencies" },
+                    { value: "3", label: "Saves and invests" }
+                ],
+                OPTIONS_ASSETS: [
+                    { name: "Refrigerator", label: "Refrigerator" },
+                    { name: "Automatic washing machine", label: "Automatic washing machine" },
+                    { name: "Smartphone", label: "Smartphone" },
+                    { name: "Air conditioner", label: "Air conditioner" },
+                    { name: "Agricultural land", label: "Agricultural land" },
+                    { name: "Land for housing", label: "Land for housing" },
+                    { name: "Shop / Animal farm", label: "Shop / Animal farm" },
+                    { name: "Another house", label: "Another house" },
+                    { name: "Car", label: "Car" },
+                    { name: "Computer", label: "Computer" }
+                ]
+            }
+        };
+
+        const LANGUAGES = {
+            en: LANG_EN,
+            ar: LANG_AR
+        };
+        let CURRENT_LANG = LANGUAGES.en; // Will be set by setLanguage
+        
+        // --- SCORING CONSTANTS (Shared) ---
+        const INITIAL_MAX_SCORE = 45;
+        const SPOUSE_MAX_CONTRIB = 16; // 10 (Education) + 6 (Occupation)
+        const INCOME_MAX = 3;
+        const ASSETS_MAX = 10;
+        const EDU_MAX_PER_SPOUSE = 10;
+        const OCC_MAX_PER_SPOUSE = 6;
+        
+        // --- GLOBAL FIREBASE/AUTH VARIABLES ---
+        let db;
+        let auth;
+        let userId = 'loading';
+        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'default-fses-app';
+
+
+        // --- UTILITY FUNCTIONS ---
+
+        /** Fetches selected text label for a select element */
+        function getSelectLabel(id) {
+            const select = document.getElementById(id);
+            return select.options[select.selectedIndex].text;
+        }
+
+        /** Fetches selected text label for a radio button group */
+        function getRadioLabel(name) {
+            const radios = document.getElementsByName(name);
+            for (const radio of radios) {
+                if (radio.checked) {
+                    return radio.getAttribute('data-label');
+                }
+            }
+            return null;
+        }
+        
+        // --- LANGUAGE/UI SETUP FUNCTIONS ---
+
+        function populateSelect(selectId, options) {
+            const select = document.getElementById(selectId);
+            select.innerHTML = '';
+            options.forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = option.value;
+                opt.textContent = option.label;
+                select.appendChild(opt);
+            });
+        }
+
+        function populateRadioGroup(groupId, options) {
+            const group = document.getElementById(groupId);
+            group.innerHTML = '';
+            options.forEach((option, index) => {
+                const div = document.createElement('div');
+                div.className = `flex items-center space-x-3 ${CURRENT_LANG.dir === 'rtl' ? 'space-x-reverse' : ''}`;
+                
+                const input = document.createElement('input');
+                input.id = `income_${index}`;
+                input.name = 'income';
+                input.type = 'radio';
+                input.value = option.value;
+                input.setAttribute('data-label', option.label);
+                input.className = 'h-4 w-4 text-blue-600 border-gray-300';
+
+                const label = document.createElement('label');
+                label.htmlFor = input.id;
+                label.className = 'text-sm font-medium text-gray-700';
+                label.textContent = option.label;
+                
+                div.appendChild(input);
+                div.appendChild(label);
+                group.appendChild(div);
+            });
+        }
+
+        function populateAssetsCheckboxes(groupId, options) {
+            const group = document.getElementById(groupId);
+            group.innerHTML = '';
+
+            options.forEach((option, index) => {
+                const colIndex = index % 2;
+                let div = group.querySelector(`.asset-col-${colIndex}`);
+                
+                // If column div doesn't exist, create it (Tailwind grid handles layout)
+                if (!div) {
+                    div = document.createElement('div');
+                    div.className = `flex items-center space-x-3 ${CURRENT_LANG.dir === 'rtl' ? 'space-x-reverse' : ''}`;
+                    div.id = `asset-item-${index}`;
+                    group.appendChild(div);
+                }
+
+                const input = document.createElement('input');
+                input.id = `asset_${index + 1}`;
+                input.name = 'assets';
+                input.type = 'checkbox';
+                input.value = '1';
+                input.setAttribute('data-asset-name', option.label);
+                input.className = 'h-4 w-4 text-blue-600 rounded border-gray-300';
+                
+                const label = document.createElement('label');
+                label.htmlFor = input.id;
+                label.className = 'text-sm font-medium text-gray-700';
+                label.textContent = option.label;
+                
+                div.innerHTML = ''; // Clear previous content
+                div.appendChild(input);
+                div.appendChild(label);
+            });
+        }
+
+        function updateStaticText() {
+            const S = CURRENT_LANG.strings;
+            document.getElementById('main-title').textContent = S.TITLE;
+            document.getElementById('welcome-title').textContent = S.WELCOME_TITLE;
+            document.getElementById('welcome-text').innerHTML = S.WELCOME_TEXT;
+            document.getElementById('start-button').textContent = S.START_CALCULATION;
+            
+            document.getElementById('calc-title').textContent = S.CALCULATION_TITLE;
+            document.getElementById('finance-title').textContent = S.FINANCE_TITLE;
+            document.getElementById('husband-title').textContent = S.HUSBAND_TITLE;
+            document.getElementById('wife-title').textContent = S.WIFE_TITLE;
+            document.getElementById('edu-h-label').textContent = S.EDU_LABEL;
+            document.getElementById('occ-h-label').textContent = S.OCC_LABEL;
+            document.getElementById('edu-w-label').textContent = S.EDU_LABEL;
+            document.getElementById('occ-w-label').textContent = S.OCC_LABEL;
+            document.getElementById('income-title').textContent = S.INCOME_TITLE;
+            document.getElementById('assets-title').textContent = S.ASSETS_TITLE;
+            document.getElementById('calculate-button').textContent = S.CALCULATE_BUTTON;
+            
+            document.getElementById('results-title').textContent = S.RESULTS_TITLE;
+            document.getElementById('breakdown-title').textContent = S.SCORE_BREAKDOWN;
+            document.getElementById('th-domain').textContent = S.TABLE_DOMAIN;
+            document.getElementById('th-score').textContent = S.TABLE_SCORE;
+            document.getElementById('th-max').textContent = S.TABLE_MAX;
+            document.getElementById('start-again-button').textContent = S.START_AGAIN;
+        }
+
+        function setLanguage(langCode) {
+            CURRENT_LANG = LANGUAGES[langCode];
+            
+            // Set HTML direction and font
+            document.documentElement.lang = CURRENT_LANG.code;
+            document.documentElement.dir = CURRENT_LANG.dir;
+            document.body.classList.toggle('text-right-rtl', CURRENT_LANG.dir === 'rtl');
+            document.body.classList.toggle('text-left-rtl', CURRENT_LANG.dir === 'ltr');
+
+
+            // Populate dynamic content (selects, radios, checkboxes)
+            populateSelect('edu_h', CURRENT_LANG.strings.OPTIONS_EDU);
+            populateSelect('occ_h', CURRENT_LANG.strings.OPTIONS_OCC);
+            populateSelect('edu_w', CURRENT_LANG.strings.OPTIONS_EDU);
+            populateSelect('occ_w', CURRENT_LANG.strings.OPTIONS_OCC);
+            populateRadioGroup('income-radio-group', CURRENT_LANG.strings.OPTIONS_INCOME);
+            populateAssetsCheckboxes('assets-checkbox-group', CURRENT_LANG.strings.OPTIONS_ASSETS);
+            
+            // Update all static text strings
+            updateStaticText();
+
+            // Switch view from language selection to intro screen
+            document.getElementById('language-select-screen').classList.add('hidden');
+            document.getElementById('intro-screen').classList.remove('hidden');
+
+            // If Firebase is already initialized, update status
+            if (userId !== 'loading') {
+                 document.getElementById('auth-status').innerHTML = CURRENT_LANG.strings.AUTH_SUCCESS + `<span class="font-mono text-xs">${userId}</span>`;
+            }
+        }
+
+        // --- FIREBASE INITIALIZATION AND AUTH ---
+        async function initializeFirebase() {
+            try {
+                if (typeof setLogLevel !== 'undefined') { setLogLevel('debug'); } 
+
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                
+                if (Object.keys(firebaseConfig).length === 0) {
+                    console.error("Firebase config is missing.");
+                    // Cannot rely on CURRENT_LANG yet, use placeholder
+                    document.getElementById('auth-status').innerText = "Error: Firebase configuration missing."; 
+                    return;
+                }
+                
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        // Update status text based on selected language
+                        document.getElementById('auth-status').innerHTML = CURRENT_LANG.strings.AUTH_SUCCESS + `<span class="font-mono text-xs">${userId}</span>`;
+                        document.getElementById('start-button').disabled = false;
+                        document.getElementById('start-button').classList.remove('opacity-50', 'cursor-not-allowed');
+                    } else {
+                        userId = 'anonymous';
+                        document.getElementById('auth-status').innerText = CURRENT_LANG.strings.AUTH_ERROR + 'Authentication failed.';
+                    }
+                });
+                
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                document.getElementById('auth-status').innerText = CURRENT_LANG.strings.AUTH_ERROR + error.message;
+            }
+        }
+        
+        // --- DATA SAVING FUNCTION ---
+
+        async function saveCalculation(data) {
+            const S = CURRENT_LANG.strings;
+            const saveStatusElement = document.getElementById('save-status-results');
+            
+            saveStatusElement.innerText = S.SAVE_STATUS_SAVING;
+            saveStatusElement.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700');
+            saveStatusElement.classList.add('bg-yellow-100', 'text-yellow-700');
+            
+            try {
+                const collectionPath = `artifacts/${APP_ID}/users/${userId}/fses_scores`;
+                const collectionRef = collection(db, collectionPath);
+                
+                await addDoc(collectionRef, data);
+                
+                saveStatusElement.innerText = S.SAVE_STATUS_SUCCESS;
+                saveStatusElement.classList.remove('bg-yellow-100', 'text-yellow-700');
+                saveStatusElement.classList.add('bg-green-100', 'text-green-700');
+                document.getElementById('save-success').classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Error saving document:", error);
+                saveStatusElement.innerText = S.SAVE_STATUS_FAIL + error.message;
+                saveStatusElement.classList.remove('bg-yellow-100', 'text-yellow-700');
+                saveStatusElement.classList.add('bg-red-100', 'text-red-700');
+                document.getElementById('save-success').classList.add('hidden');
+            } finally {
+                saveStatusElement.classList.remove('hidden');
+            }
+        }
+
+        // --- UI FLOW AND CALCULATION ---
+
+        function startCalculation() {
+            if (document.getElementById('start-button').disabled) return;
+            document.getElementById('intro-screen').classList.add('hidden');
+            document.getElementById('calculator-screen').classList.remove('hidden');
+            document.getElementById('ses-form').reset(); 
+            document.getElementById('error-message').classList.add('hidden');
+            document.getElementById('save-status-results').classList.add('hidden');
+        }
+
+        function startAgain() {
+            document.getElementById('intro-screen').classList.remove('hidden');
+            document.getElementById('results-screen').classList.add('hidden');
+            document.getElementById('ses-form').reset();
+            document.getElementById('error-message').classList.add('hidden');
+            document.getElementById('save-status-results').classList.add('hidden');
+        }
+
+
+        function calculateSES() {
+            const S = CURRENT_LANG.strings;
+            let totalScore = 0;
+            let missingFields = false;
+            
+            // --- Collect Input Details (For Saving) ---
+            const inputs = {
+                edu_h_label: getSelectLabel('edu_h'),
+                edu_w_label: getSelectLabel('edu_w'),
+                occ_h_label: getSelectLabel('occ_h'),
+                occ_w_label: getSelectLabel('occ_w'),
+                income_label: getRadioLabel('income'),
+                assets_selected: []
+            };
+
+            // --- 1. Education (Husband/Wife) ---
+            const edu_h_score = parseInt(document.getElementById('edu_h').value);
+            const edu_w_score = parseInt(document.getElementById('edu_w').value);
+            
+            if (document.getElementById('edu_h').value === "" || document.getElementById('edu_w').value === "") missingFields = true;
+            const score_edu = (isNaN(edu_h_score) ? 0 : edu_h_score) + (isNaN(edu_w_score) ? 0 : edu_w_score);
+            
+            // --- 2. Occupation (Husband/Wife) ---
+            const occ_h_score = parseInt(document.getElementById('occ_h').value);
+            const occ_w_score = parseInt(document.getElementById('occ_w').value);
+
+            if (document.getElementById('occ_h').value === "" || document.getElementById('occ_w').value === "") missingFields = true;
+            const score_occ = (isNaN(occ_h_score) ? 0 : occ_h_score) + (isNaN(occ_w_score) ? 0 : occ_w_score);
+
+            // --- 3. Family Income ---
+            const income_radios = document.getElementsByName('income');
+            let income_selected = false;
+            let score_income = 0;
+            
+            for (const radio of income_radios) {
+                if (radio.checked) {
+                    score_income = parseInt(radio.value);
+                    income_selected = true;
+                    break;
+                }
+            }
+            if (!income_selected) missingFields = true;
+
+            // --- 4. Family Assets ---
+            const asset_checkboxes = document.getElementsByName('assets');
+            let score_assets = 0;
+            for (const checkbox of asset_checkboxes) {
+                if (checkbox.checked) {
+                    score_assets += 1;
+                    inputs.assets_selected.push(checkbox.getAttribute('data-asset-name'));
+                }
+            }
+
+            // --- DYNAMIC MAX SCORE CALCULATION & VALIDATION ---
+            let currentMaxScore = INITIAL_MAX_SCORE;
+            const naOption = CURRENT_LANG.strings.OPTIONS_EDU.find(opt => opt.na);
+            const naLabel = naOption ? naOption.label : 'Non-applicable (death/divorce)';
+            
+            // Check if Husband is Non-Applicable
+            const is_h_edu_na = inputs.edu_h_label.includes(naLabel);
+            const is_h_occ_na = inputs.occ_h_label.includes(naLabel);
+            
+            // Check if Wife is Non-Applicable
+            const is_w_edu_na = inputs.edu_w_label.includes(naLabel);
+            const is_w_occ_na = inputs.occ_w_label.includes(naLabel);
+
+            // --- NEW VALIDATION: INCONSISTENT NA SELECTION ---
+            // 1. Husband inconsistency check: (Edu NA XOR Occ NA) -> Error
+            if (is_h_edu_na !== is_h_occ_na) {
+                document.getElementById('error-message').innerText = S.ERROR_NA_INCONSISTENT;
+                document.getElementById('error-message').classList.remove('hidden');
+                return;
+            }
+
+            // 2. Wife inconsistency check: (Edu NA XOR Occ NA) -> Error
+            if (is_w_edu_na !== is_w_occ_na) {
+                document.getElementById('error-message').innerText = S.ERROR_NA_INCONSISTENT;
+                document.getElementById('error-message').classList.remove('hidden');
+                return;
+            }
+            // --- END NEW VALIDATION ---
+
+            // Determine if spouse is fully NA (guaranteed if either was NA, due to the check above)
+            const is_h_fully_na = is_h_edu_na && is_h_occ_na;
+            const is_w_fully_na = is_w_edu_na && is_w_occ_na;
+            
+            // EXISTING VALIDATION: Cannot calculate if BOTH are fully Non-Applicable
+            if (is_h_fully_na && is_w_fully_na) {
+                document.getElementById('error-message').innerText = S.ERROR_NA_BOTH;
+                document.getElementById('error-message').classList.remove('hidden');
+                return;
+            }
+
+            // Adjust max score if one spouse is NA (45 -> 29)
+            if (is_h_fully_na || is_w_fully_na) {
+                currentMaxScore -= SPOUSE_MAX_CONTRIB;
+            }
+            
+            // --- Final Validation (Missing Fields) ---
+            if (missingFields) {
+                document.getElementById('error-message').innerText = S.ERROR_MISSING;
+                document.getElementById('error-message').classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('error-message').classList.add('hidden');
+            totalScore = score_edu + score_occ + score_income + score_assets;
+            
+            // --- Classification Logic ---
+            const percentage = (totalScore / currentMaxScore) * 100;
+            let level, classificationText, levelColor;
+            
+            if (percentage >= 76) {
+                level = S.CLASSIFICATIONS.HIGH; 
+                levelColor = "text-green-800";
+            } else if (percentage >= 51) {
+                level = S.CLASSIFICATIONS.MIDDLE; 
+                levelColor = "text-blue-800";
+            } else if (percentage >= 26) {
+                level = S.CLASSIFICATIONS.LOW; 
+                levelColor = "text-yellow-700";
+            } else {
+                level = S.CLASSIFICATIONS.VERY_LOW; 
+                levelColor = "text-red-800";
+            }
+            
+            classificationText = `${level} (${percentage.toFixed(1)}%)`;
+
+            // --- DATA PAYLOAD FOR FIRESTORE ---
+            const dataToSave = {
+                userId: userId,
+                timestamp: new Date().toISOString(),
+                language: CURRENT_LANG.code,
+                totalScore: totalScore,
+                percentage: parseFloat(percentage.toFixed(1)),
+                classification: level,
+                score_edu: score_edu,
+                score_occ: score_occ,
+                score_income: score_income,
+                score_assets: score_assets,
+                input_details: inputs,
+                maxScore: currentMaxScore
+            };
+            
+            // 1. Save Data (asynchronously)
+            saveCalculation(dataToSave);
+
+            // 2. Hide Calculator and Show Results (UI Update)
+            document.getElementById('calculator-screen').classList.add('hidden');
+            document.getElementById('results-screen').classList.remove('hidden');
+            
+            // 3. Insert Score
+            document.getElementById('result-score').innerHTML = `
+                <p class="text-base text-green-700">${S.SCORE_TOTAL} ${currentMaxScore}</p>
+                <p class="text-4xl font-extrabold ${levelColor}">${totalScore} / ${currentMaxScore}</p>
+            `;
+
+            // 4. Insert Classification
+            document.getElementById('result-classification').innerHTML = `
+                <p class="text-xl text-green-800 font-semibold">${S.CLASSIFICATION_FINAL}</p>
+                <p class="text-3xl font-bold ${levelColor} mt-1">${level}</p>
+                <p class="text-lg text-green-700 mt-1">(${percentage.toFixed(1)}%)</p>
+            `;
+
+            // 5. Breakdown Table
+            const breakdownBody = document.getElementById('breakdown-body');
+            breakdownBody.innerHTML = '';
+            
+            // Re-calculate max for breakdown table based on who is NA
+            const max_edu = (is_h_fully_na ? 0 : EDU_MAX_PER_SPOUSE) + (is_w_fully_na ? 0 : EDU_MAX_PER_SPOUSE);
+            const max_occ = (is_h_fully_na ? 0 : OCC_MAX_PER_SPOUSE) + (is_w_fully_na ? 0 : OCC_MAX_PER_SPOUSE);
+
+            const breakdownDataCorrected = [
+                { domain: S.DOMAIN_EDU, score: score_edu, max: max_edu },
+                { domain: S.DOMAIN_OCC, score: score_occ, max: max_occ },
+                { domain: S.DOMAIN_INC, score: score_income, max: INCOME_MAX },
+                { domain: S.DOMAIN_ASSET, score: score_assets, max: ASSETS_MAX }
+            ];
+
+            breakdownDataCorrected.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="py-3 px-4 text-gray-800 text-left-rtl">${item.domain}</td>
+                    <td class="py-3 px-4 text-gray-800 text-center font-medium">${item.score}</td>
+                    <td class="py-3 px-4 text-gray-600 text-center">${item.max}</td>
+                `;
+                breakdownBody.appendChild(row);
+            });
+        }
+
+        // Initialize Firebase after the language choice is made (in setLanguage)
+        // But run the basic auth check on load, if possible.
+        window.onload = initializeFirebase;
+    </script>
+</body>
+</html>
