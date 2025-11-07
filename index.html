@@ -1,4 +1,3 @@
-
 <html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
@@ -365,8 +364,7 @@
                     { value: "1", label: "Barely meets basic needs" },
                     { value: "2", label: "Meets needs + emergencies" },
                     { value: "3", label: "Saves and invests" }
-                ]
-                ,
+                ],
                 OPTIONS_ASSETS: [
                     { name: "Refrigerator", label: "Refrigerator" },
                     { name: "Automatic washing machine", label: "Automatic washing machine" },
@@ -479,7 +477,7 @@
                 input.setAttribute('data-asset-name', option.label);
                 input.className = 'h-4 w-4 text-blue-600 rounded border-gray-300';
                 
-                const label = document.html.createElement('label');
+                const label = document.createElement('label');
                 label.htmlFor = input.id;
                 label.className = 'text-sm font-medium text-gray-700';
                 label.textContent = option.label;
@@ -533,7 +531,6 @@
             populateSelect('occ_w', CURRENT_LANG.strings.OPTIONS_OCC);
             populateRadioGroup('income-radio-group', CURRENT_LANG.strings.OPTIONS_INCOME);
             
-            // Fix for asset checkboxes since the original populateAssetsCheckboxes had issues in this editor
             // Manually clearing and populating the asset group content for stability
             const assetGroup = document.getElementById('assets-checkbox-group');
             assetGroup.innerHTML = '';
@@ -579,23 +576,24 @@
             const isConfigAvailable = (typeof __firebase_config !== 'undefined' && JSON.parse(__firebase_config).apiKey);
 
             if (!isConfigAvailable) {
-                // FALLBACK FOR LOCAL TESTING (NO REAL DATABASE CONNECTION)
+                // FALLBACK FOR LOCAL TESTING (MOCKING DATABASE CONNECTION)
                 console.warn("Firebase configuration not found. Simulating successful connection for local testing.");
                 userId = 'TEST-RESEARCHER-ID';
                 
                 // Use a slight delay to mimic async loading
                 setTimeout(() => {
+                    // Display status using the language strings
                     document.getElementById('auth-status').innerHTML = CURRENT_LANG.strings.AUTH_SUCCESS + `<span class="font-mono text-xs">${userId}</span>`;
                     document.getElementById('start-button').disabled = false;
                     document.getElementById('start-button').classList.remove('opacity-50', 'cursor-not-allowed');
                 }, 500);
 
-                // Override saveCalculation to do nothing but report success
+                // Mock saveCalculation function: reports success without saving data
                 window.saveCalculation = async function(data) {
                     const S = CURRENT_LANG.strings;
                     const saveStatusElement = document.getElementById('save-status-results');
                     
-                    saveStatusElement.innerText = S.SAVE_STATUS_SUCCESS + " (Data not saved in this test environment)";
+                    saveStatusElement.innerText = S.SAVE_STATUS_SUCCESS + " (" + (CURRENT_LANG.code === 'ar' ? "لم يتم حفظ البيانات في بيئة الاختبار هذه" : "Data not saved in this test environment") + ")";
                     saveStatusElement.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-yellow-100', 'text-yellow-700');
                     saveStatusElement.classList.add('bg-green-100', 'text-green-700');
                     document.getElementById('save-success').classList.remove('hidden');
